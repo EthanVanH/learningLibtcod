@@ -10,6 +10,8 @@ ROOM_MAX_SIZE = 10
 ROOM_MIN_SIZE = 6
 MAX_ROOMS = 30
 
+MAX_ROOM_MONSTERS = 3
+
 LIMIT_FPS = 20
 
 FOV_ALGO = 0
@@ -21,6 +23,9 @@ color_light_wall = libtcod.Color(130, 11, 50)
 color_dark_ground = libtcod.Color(50, 50, 150)
 color_light_ground = libtcod.Color(200, 180, 50)
 
+game_state = 'playing'
+player_action = None
+
 class Rect:
     #a rectangle on the map. used to characterize a room
     def __init__(self, x, y, w, h):
@@ -28,7 +33,7 @@ class Rect:
         self.y1 = y
         self.x2 = x + w
         self.y2 = y + h
-    
+
     def center(self):
         center_x = (self.x1 + self.x2)/2
         center_y = (self.y1 + self.y2)/2
@@ -42,7 +47,7 @@ class Tile:
     #a tile of the map and its properties
     def __init__(self,blocked,block_sight = None):
         self.blocked = blocked
-
+        self.explored = False    
         #by default if a tile is blocked it also blocks sight
         if block_sight is None: block_sight = blocked
         self.block_sight = block_sight
@@ -50,15 +55,17 @@ class Tile:
 class Object:
     #This is a genaric object: the play, a monster, an item , stairs
     # its always represented by a character on the screen
-    def __init__(self,x,y,char,color):
+    def __init__(self,x,y,char,name,color,blocks = False):
         self.x = x
         self.y = y
         self.char = char
         self.color = color
+        self.name = name
+        self.blocks = blocks
 
     def move(self,dx,dy):
         #move by the given delta's
-        if not map[self.x + dx][self.y + dy].blocked:
+        if not is_blocked(self.x +dx, self.y +dy):
             self.x += dx
             self.y += dy
 
@@ -85,20 +92,20 @@ def handle_keys():
     elif key.vk == libtcod.KEY_ESCAPE:
         #escape exits game
         return True 
-
-    #movement keys
-    if libtcod.console_is_key_pressed(libtcod.KEY_UP):
-        player.move(0,-1)
-        fov_recompute = True
-    elif libtcod.console_is_key_pressed(libtcod.KEY_DOWN):
-        player.move(0,1)
-        fov_recompute = True
-    elif libtcod.console_is_key_pressed(libtcod.KEY_LEFT):
-        player.move(-1,0)
-        fov_recompute = True
-    elif libtcod.console_is_key_pressed(libtcod.KEY_RIGHT):
-        player.move(1,0)
-        fov_recompute = True
+    if game_state == 'playing'
+        #movement keys
+        if libtcod.console_is_key_pressed(libtcod.KEY_UP):
+            player.move(0,-1)
+            fov_recompute = True
+        elif libtcod.console_is_key_pressed(libtcod.KEY_DOWN):
+            player.move(0,1)
+            fov_recompute = True
+        elif libtcod.console_is_key_pressed(libtcod.KEY_LEFT):
+            player.move(-1,0)
+            fov_recompute = True
+        elif libtcod.console_is_key_pressed(libtcod.KEY_RIGHT):
+            player.move(1,0)
+            fov_recompute = True
 
 def make_map():
     global map
@@ -132,9 +139,6 @@ def make_map():
             create_room(new_room)
             (new_x, new_y) = new_room.center()
             
-            room_no = Object(new_x, new_y, chr(65+num_rooms),libtcod.white)
-            objects.insert(0, room_no)
-
             if num_rooms == 0:
                 #if its the furst room put the player there
                 player.x = new_x
@@ -153,6 +157,8 @@ def make_map():
                     #vertical first
                     create_v_tunnel(prev_y, new_y, prev_x)
                     create_h_tunnel(prev_x, new_x, new_y)
+           
+            place_objects(new_room)
             rooms.append(new_room)
             num_rooms += 1
 
@@ -171,16 +177,17 @@ def render_all():
             visible = libtcod.map_is_in_fov(fov_map, x, y)
             wall = map[x][y].block_sight
             if not visible:
-                if wall:
-                    libtcod.console_set_char_background(con, x, y, color_dark_wall, libtcod.BKGND_SET)
-                else:
-                    libtcod.console_set_char_background(con, x, y, color_dark_ground, libtcod.BKGND_SET)
+                if map[x][y].explored:
+                    if wall:
+                        libtcod.console_set_char_background(con, x, y, color_dark_wall, libtcod.BKGND_SET)
+                    else:
+                        libtcod.console_set_char_background(con, x, y, color_dark_ground, libtcod.BKGND_SET)
             else:
                 if wall:
                     libtcod.console_set_char_background(con, x, y, color_light_wall, libtcod.BKGND_SET)
                 else:
                     libtcod.console_set_char_background(con, x, y, color_light_ground, libtcod.BKGND_SET)
-
+                map[x][y].explored = True
 
     #draw all objects in the list
     for object in objects:
@@ -208,6 +215,39 @@ def create_v_tunnel(y1, y2, x):
     for y in range(min(y1, y2), max(y1, y2) + 1):
         map[x][y].blocked = False
         map[x][y].block_sight = False
+
+def place_objects(room):
+    #as we stand objects must be monsters
+    #choose a random number of monsters
+    num_monsters = libtcod.random_get_int(0, 0, MAX_ROOM_MONSTERS)
+
+    for i in range(num_monsters):
+        #choose a random spot for the monster
+        x = libtcod.random_get_int(0, room.x1, room.x2)
+        y = libtcod.random_get_int(0, room.y1, room.y2)
+        if not is_blocked(x, y):
+            choice = libtcod.random_get_int(0,0,100)
+            if choice< 40: #80% chance of orc
+                #ORC
+                monster = Object(x, y, 'o', 'orc', libtcod.desaturated_green, blocks = True)
+            elif choice ==41: #1% chance of Alec
+                monster = Object(x, y, 'A', 'Alec', libtcod.orange, blocks = True)
+            elif choice > 41: 
+                monster = Object(x, y, 'J', 'Jacobi', libtcod.light_purple, blocks = True)
+            else:
+                #TROLL
+                monster = Object(x, y, 'T', 'Troll', libtcod.darker_green, blocks = True)
+            objects.append(monster)
+
+def is_blocked(x,y):
+    if map[x][y].blocked:
+        return True
+
+    for object in objects:
+        if object.blocks and object.x ==x and object.y == y:
+            return True
+    return False
+
 #console initialization
 libtcod.console_set_custom_font('arial10x10.png',libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
 
@@ -219,9 +259,8 @@ libtcod.sys_set_fps(LIMIT_FPS)
 
 
 #Object initialization
-player = Object(SCREEN_WIDTH/2,SCREEN_HEIGHT/2,'@',libtcod.white)
-npc = Object(SCREEN_WIDTH/2-5,SCREEN_HEIGHT/2,'@',libtcod.yellow)
-objects = [npc,player]
+player = Object(SCREEN_WIDTH/2,SCREEN_HEIGHT/2,'@','player',libtcod.white,blocks = True)
+objects = [player]
 # generates the map(NOT DRAWN)
 make_map()
 
