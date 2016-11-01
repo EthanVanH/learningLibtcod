@@ -12,8 +12,14 @@ MAX_ROOMS = 30
 
 LIMIT_FPS = 20
 
-color_dark_wall = libtcod.Color(10,10,100)
-color_dark_ground = libtcod.Color(50,50,150)
+FOV_ALGO = 0
+FOV_LIGHT_WALLS = True
+TORCH_RADIUS = 10
+
+color_dark_wall = libtcod.Color(10, 10, 100)
+color_light_wall = libtcod.Color(130, 11, 50)
+color_dark_ground = libtcod.Color(50, 50, 150)
+color_light_ground = libtcod.Color(200, 180, 50)
 
 class Rect:
     #a rectangle on the map. used to characterize a room
@@ -57,15 +63,18 @@ class Object:
             self.y += dy
 
     def draw(self):
-        #set the color then draw the character that represents this object in its position
-        libtcod.console_set_default_foreground(con,self.color)
-        libtcod.console_put_char(con,self.x,self.y,self.char,libtcod.BKGND_NONE)
+        #set the color then draw the character that represents this object in its position 
+        if libtcod.map_is_in_fov(fov_map, self.x, self.y):
+            libtcod.console_set_default_foreground(con,self.color)
+            libtcod.console_put_char(con,self.x,self.y,self.char,libtcod.BKGND_NONE)
+
 
     def clear(self):
         #erase the character that represents the object
         libtcod.console_put_char(con,self.x,self.y,' ',libtcod.BKGND_NONE)
 
 def handle_keys():
+    global fov_recompute
     global playerx, playery
     
 
@@ -80,12 +89,16 @@ def handle_keys():
     #movement keys
     if libtcod.console_is_key_pressed(libtcod.KEY_UP):
         player.move(0,-1)
+        fov_recompute = True
     elif libtcod.console_is_key_pressed(libtcod.KEY_DOWN):
         player.move(0,1)
+        fov_recompute = True
     elif libtcod.console_is_key_pressed(libtcod.KEY_LEFT):
         player.move(-1,0)
+        fov_recompute = True
     elif libtcod.console_is_key_pressed(libtcod.KEY_RIGHT):
         player.move(1,0)
+        fov_recompute = True
 
 def make_map():
     global map
@@ -144,18 +157,31 @@ def make_map():
             num_rooms += 1
 
 def render_all():
-    global color_light_wall
-    global color_light_ground
+    global color_light_wall, color_dark_wall
+    global color_light_ground, color_dark_ground
+    global fov_recompute
 
+    if fov_recompute:
+        fov_recompute = False
+        libtcod.map_compute_fov(fov_map, player.x, player.y, TORCH_RADIUS, FOV_LIGHT_WALLS, FOV_ALGO)
     #go through all tiles and set their background colour
+  
     for y in range(MAP_HEIGHT):
         for x in range(MAP_WIDTH):
+            visible = libtcod.map_is_in_fov(fov_map, x, y)
             wall = map[x][y].block_sight
-            if wall:
-                libtcod.console_set_char_background(con, x, y, color_dark_wall, libtcod.BKGND_SET)
+            if not visible:
+                if wall:
+                    libtcod.console_set_char_background(con, x, y, color_dark_wall, libtcod.BKGND_SET)
+                else:
+                    libtcod.console_set_char_background(con, x, y, color_dark_ground, libtcod.BKGND_SET)
             else:
-                libtcod.console_set_char_background(con, x, y, color_dark_ground, libtcod.BKGND_SET)
-    
+                if wall:
+                    libtcod.console_set_char_background(con, x, y, color_light_wall, libtcod.BKGND_SET)
+                else:
+                    libtcod.console_set_char_background(con, x, y, color_light_ground, libtcod.BKGND_SET)
+
+
     #draw all objects in the list
     for object in objects:
         object.draw()
@@ -196,10 +222,16 @@ libtcod.sys_set_fps(LIMIT_FPS)
 player = Object(SCREEN_WIDTH/2,SCREEN_HEIGHT/2,'@',libtcod.white)
 npc = Object(SCREEN_WIDTH/2-5,SCREEN_HEIGHT/2,'@',libtcod.yellow)
 objects = [npc,player]
-player.x = 25
-player.y = 23
 # generates the map(NOT DRAWN)
 make_map()
+
+#fov mapping
+fov_map = libtcod.map_new(MAP_WIDTH, MAP_HEIGHT)
+for y in range(MAP_HEIGHT):
+    for x in range(MAP_WIDTH):
+        libtcod.map_set_properties(fov_map, x, y, not map[x][y].block_sight, not map[x][y].blocked)
+
+fov_recompute = True
 
 #game loop
 while not libtcod.console_is_window_closed():
