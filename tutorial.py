@@ -61,7 +61,7 @@ class Tile:
 class Object:
     #This is a genaric object: the play, a monster, an item , stairs
     # its always represented by a character on the screen
-    def __init__(self,x,y,char,name,color,blocks = False, fighter=None, ai=None):
+    def __init__(self,x,y,char,name,color,blocks = False, fighter=None, ai=None,speed = DEFAULT_SPEED):
         self.x = x
         self.y = y
         self.char = char
@@ -76,7 +76,7 @@ class Object:
         if self.ai: #let the Ai component know who owns it
             self.ai.owner = self
 
-        self.speed = DEFAULT_SPEED
+        self.speed = speed
         self.wait = 0
 
     def move(self,dx,dy):
@@ -122,12 +122,13 @@ class Object:
 
 class Fighter:
     #combat-related properties and methods (monster, player, npc)
-    def __init__(self, hp, defense, power, death_function=None):
+    def __init__(self, hp, defense, power, death_function=None, attack_speed = DEFAULT_ATTACK_SPEED):
         self.max_hp = hp
         self.hp = hp
         self.defense = defense
         self.power = power
         self.death_function = death_function
+        self.attack_speed = attack_speed
 
     def take_damage(self,damage):
         if damage>0:
@@ -146,6 +147,8 @@ class Fighter:
             target.fighter.take_damage(damage)
         else:
             print self.owner.name.capitalize() + ' attacks ' + target.name + ' but it does nothing!'
+        
+        self.owner.wait = self.attack_speed
 
 class BasicMonster:
     #AI for a basic monster.
@@ -171,7 +174,12 @@ def handle_keys():
         libtcod.console_set_fullscreen(not libtcod.console_is_fullscreen())
     elif key.vk == libtcod.KEY_ESCAPE:
         #escape exits game
-        return 'exit'  
+        return 'exit' 
+
+    if player.wait >0:
+        player.wait -= 1
+        return
+
     if game_state == 'playing':
         #movement keys
         if libtcod.console_is_key_pressed(libtcod.KEY_UP):
@@ -390,7 +398,7 @@ libtcod.sys_set_fps(LIMIT_FPS)
 
 #Object initialization
 player_fighter_component = Fighter(hp=30, defense=2, power=5, death_function = player_death)
-player = Object(SCREEN_WIDTH/2,SCREEN_HEIGHT/2,'@','player',libtcod.white,blocks = True,fighter=player_fighter_component)
+player = Object(SCREEN_WIDTH/2,SCREEN_HEIGHT/2,'@','player',libtcod.white,blocks = True,fighter=player_fighter_component, speed=PLAYER_SPEED)
 objects = [player]
 # generates the map(NOT DRAWN)
 make_map()
@@ -413,10 +421,13 @@ while not libtcod.console_is_window_closed():
         object.clear()
 
     player_action = handle_keys()
-    if game_state == 'playing' and player_action != 'didnt-take-turn':
+    if game_state == 'playing':
         for object in objects:
             if object.ai:
-                object.ai.take_turn()
+                if object.wait >0: #dont take a turn if still waiting
+                    object.wait -=1
+                else:
+                    object.ai.take_turn()
 
     if player_action == 'exit':
         break
