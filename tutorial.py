@@ -175,11 +175,12 @@ class BasicMonster:
                 monster.fighter.attack(player)
     
 def handle_keys():
+    global key
     global fov_recompute
     global playerx, playery
     
-    #realtime
-    key = libtcod.console_check_for_keypress()
+    #realtime Not needed when mouse and keyboard are configured
+    #key = libtcod.console_check_for_keypress()
     #turn based
     #key = libtcod.console_wait_for_keypress()
     if key.vk == libtcod.KEY_ENTER and key.lalt:
@@ -205,6 +206,19 @@ def handle_keys():
             player_move_or_attack(1,0)
         else:
             return 'didnt-take-turn'
+
+def get_names_under_mouse():
+    global mouse
+
+    #return a string with the names of all objects under the mouse
+    (x, y) = (mouse.cx, mouse.cy)
+
+    #create a list with the names of all objects at teh mouse coordinates and in FOV
+    names = [obj.name for obj in objects
+        if obj.x == x and obj.y ==y and libtcod.map_is_in_fov(fov_map, obj.x, obj.y)]
+
+    names = ', '.join(names)
+    return names.capitalize()
 
 def make_map():
     global map
@@ -305,8 +319,13 @@ def render_all():
     for(line, color) in game_msgs:
         libtcod.console_set_default_foreground(panel, color)
         libtcod.console_print_ex(panel, MSG_X, y, libtcod.BKGND_NONE, libtcod.LEFT, line)
-   
+        y +=1
+
     render_bar(1, 1, BAR_WIDTH, 'HP', player.fighter.hp, player.fighter.max_hp, libtcod.light_red, libtcod.darker_red)
+
+    #render mouse hover names
+    libtcod.console_set_default_foreground(panel, libtcod.light_grey)
+    libtcod.console_print_ex(panel, 1, 0, libtcod.BKGND_NONE, libtcod.LEFT, get_names_under_mouse())
 
     #blit contents of panel to display (bars and messages)
     libtcod.console_blit(panel, 0, 0, SCREEN_WIDTH, PANEL_HEIGHT, 0, 0, PANEL_Y)
@@ -468,8 +487,13 @@ fov_recompute = True
 #opening message
 message('Welcome, to Ethans RL.  I bet you dont survive the floor', libtcod.red)
 
+#configure mouse keyboard
+mouse = libtcod.Mouse()
+key = libtcod.Key()
+
 #game loop
 while not libtcod.console_is_window_closed():
+    libtcod.sys_check_for_event(libtcod.EVENT_KEY_PRESS| libtcod.EVENT_MOUSE, key, mouse)
     render_all()
     
     libtcod.console_flush()    
