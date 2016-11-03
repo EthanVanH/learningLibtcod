@@ -2,6 +2,7 @@
 import tcod as libtcod
 import math
 import textwrap
+import shelve
 
 SCREEN_WIDTH = 80
 SCREEN_HEIGHT = 50
@@ -730,7 +731,31 @@ def initialize_fov():
         for x in range(MAP_WIDTH):
             libtcod.map_set_properties(fov_map, x, y, not map[x][y].block_sight, not map[x][y].blocked)
 
+def save_game(): 
+    global map, objects, player, inventory, game_msgs, game_state
+    file = shelve.open('savegame', 'n')
+    file['map']= map
+    file['objects'] = objects
+    file['player_index'] = objects.index(player)
+    file['inventory'] = inventory
+    file['game_msgs'] = game_msgs
+    file['game_state'] = game_state
+    file.close()
 
+def load_game():
+    global map, objects, player, inventory, game_msgs, game_state
+
+    file.shelve.open('savegame', 'r')
+    map = file['map']
+    objects = file['objects']
+    player = objects[file['player_index']]
+    inventory = file['inventory']
+    game_msgs = file['game_msgs']
+    game_state = file['game_state']
+
+    file.close()
+
+    initialize_fov()
 
 def play_game():
     global key, mouse 
@@ -762,6 +787,8 @@ def play_game():
 
         if player_action == 'exit':
             break
+def msgbox(text, width=50):
+    menu(text, [], width)
 
 def main_menu():
     key = libtcod.Key()    
@@ -772,7 +799,7 @@ def main_menu():
         
         #show the games menu and title and credits
         libtcod.console_set_default_foreground(0, libtcod.light_yellow)
-        libtcod.console_print_ex(0, SCREEN_WIDTH/2, SCREEN_HEIGHT/2-4, libtcod.BKGND_NONE, libtcod.CENTER, "I Want to be Ethan")
+        libtcod.console_print_ex(0, SCREEN_WIDTH/2, SCREEN_HEIGHT/2-4, libtcod.BKGND_NONE, libtcod.CENTER, "The Quest to be Ethan")
         libtcod.console_print_ex(0, SCREEN_WIDTH/2, SCREEN_HEIGHT-2, libtcod.BKGND_NONE, libtcod.CENTER, 'By Ethan')
         choice = menu('',['Play a new game','Continue last game', 'Quit'], 24)
         
@@ -782,7 +809,15 @@ def main_menu():
         if choice == 0: #new game
             new_game()
             play_game()
+        elif choice ==1:
+            try:
+                load_game()
+            except:
+                msgbox('\nNo saved game to load\n', 24)
+                continue
+            play_game()
         elif choice ==2: #quit
+            save_game()
             break
 
 main_menu()
