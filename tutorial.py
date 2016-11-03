@@ -22,6 +22,7 @@ ROOM_MIN_SIZE = 6
 MAX_ROOMS = 30
 
 MAX_ROOM_MONSTERS = 3
+MAX_ROOM_ITEMS = 2
 
 LIMIT_FPS = 20
 
@@ -74,13 +75,17 @@ class Tile:
 class Object:
     #This is a genaric object: the play, a monster, an item , stairs
     # its always represented by a character on the screen
-    def __init__(self,x,y,char,name,color,blocks = False, fighter=None, ai=None,speed = DEFAULT_SPEED):
+    def __init__(self,x,y,char,name,color,blocks = False, fighter=None, ai=None,speed = DEFAULT_SPEED,item = None):
         self.x = x
         self.y = y
         self.char = char
         self.color = color
         self.name = name
         self.blocks = blocks
+
+        self.item = item
+        if self.item:
+            self.item.owner = self
 
         self.fighter = fighter
         if self.fighter: #let the fighter component know who owns it
@@ -174,6 +179,17 @@ class BasicMonster:
             elif player.fighter.hp > 0:
                 monster.fighter.attack(player)
     
+class Item:
+    #an item that can be picked up and used
+    def pick_up(self):
+        #add to player inventory from the map
+        if len(inventory) >=26:
+            message('Your invetory is full,cannot pick up, '+ self.owner.name + ' man you should hit the gym more', libtcod.red)
+        else:
+            inventory.append(self.owner)
+            objects.remove(self.owner)
+            message('You picked up a '+ self.owner.name + '!',libtcod.green)
+
 def handle_keys():
     global key
     global fov_recompute
@@ -205,6 +221,15 @@ def handle_keys():
         elif libtcod.console_is_key_pressed(libtcod.KEY_RIGHT):
             player_move_or_attack(1,0)
         else:
+            #test other keys
+            key_char = chr(key.c)
+
+            if key_char == 'g':
+                #pick up and item
+                for object in objects:
+                    if object.x == player.x and object.y == player.y and object.item:
+                        object.item.pick_up()
+                        break
             return 'didnt-take-turn'
 
 def get_names_under_mouse():
@@ -358,8 +383,8 @@ def place_objects(room):
 
     for i in range(num_monsters):
         #choose a random spot for the monster
-        x = libtcod.random_get_int(0, room.x1, room.x2)
-        y = libtcod.random_get_int(0, room.y1, room.y2)
+        x = libtcod.random_get_int(0, room.x1+1, room.x2-1)
+        y = libtcod.random_get_int(0, room.y1+1, room.y2-1)
         if not is_blocked(x, y):
             choice = libtcod.random_get_int(0,0,100)
             if choice< 40: #40% chance of orc
@@ -381,6 +406,21 @@ def place_objects(room):
                 ai_comp = BasicMonster()
                 monster = Object(x, y, 'T', 'Troll', libtcod.darker_green, blocks = True, fighter=stats, ai=ai_comp)
             objects.append(monster)
+
+    #items now
+    num_items = libtcod.random_get_int(0, 0, MAX_ROOM_ITEMS)
+
+    for i in range(num_items):
+        #choose a random spot for the item
+        x = libtcod.random_get_int(0, room.x1+1, room.x2-1)
+        y = libtcod.random_get_int(0, room.y1+1, room.y2-1)
+
+        if not is_blocked(x, y):
+            item_component = Item()
+            item = Object(x, y, '!', 'Healing potion', libtcod.violet,item = item_component)
+
+            objects.append(item)
+            item.send_to_back() #item apear below monsters
 
 def is_blocked(x,y):
     if map[x][y].blocked:
@@ -455,7 +495,8 @@ def message(new_msg, color = libtcod.white):
 
         game_msgs.append((line, color))
 
-
+#def menu(header, options, width):
+    
 #console initialization
 libtcod.console_set_custom_font('arial10x10.png',libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
 #screen initialization root is view, con is model, panel is Gui stuff
@@ -472,6 +513,7 @@ libtcod.sys_set_fps(LIMIT_FPS)
 player_fighter_component = Fighter(hp=30, defense=2, power=5, death_function = player_death)
 player = Object(SCREEN_WIDTH/2,SCREEN_HEIGHT/2,'@','player',libtcod.white,blocks = True,fighter=player_fighter_component, speed=PLAYER_SPEED)
 objects = [player]
+inventory = []
 # generates the map(NOT DRAWN)
 make_map()
 
