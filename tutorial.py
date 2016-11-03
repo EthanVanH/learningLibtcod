@@ -38,6 +38,7 @@ DEFAULT_ATTACK_SPEED = 20
 
 HEAL_AMOUNT = 5
 CONFUSE_NUM_TURNS = 10
+CONFUSE_RANGE = 6
 
 color_dark_wall = libtcod.Color(10, 10, 100)
 color_light_wall = libtcod.Color(130, 11, 50)
@@ -466,11 +467,11 @@ def place_objects(room):
                 item = Object(x, y, '!', 'Healing potion', libtcod.violet,item = item_component)
             elif dice < 70+15:
                 item_component = Item(use_function=cast_confuse)
-                item = Object(x, y, '#', 'Scroll of confuse', libtcod.light_yellow, item = item_component)
+                item = Object(x, y, '#', 'Scroll of confuse', libtcod.light_green, item = item_component)
             else:
                 #lightning bolt
                 item_component = Item(use_function = cast_lightning)
-                item = Object(x, y, '#', 'Scroll of lighting bolt', libtcod.yellow, item = item_component)
+                item = Object(x, y, '#', 'Scroll of lighting bolt', libtcod.green, item = item_component)
 
             objects.append(item)
             item.send_to_back() #item apear below monsters
