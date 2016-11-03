@@ -39,6 +39,9 @@ DEFAULT_ATTACK_SPEED = 20
 HEAL_AMOUNT = 5
 CONFUSE_NUM_TURNS = 10
 CONFUSE_RANGE = 6
+FIREBALL_RADIUS = 3
+FIREBALL_DAMAGE = 12
+
 
 color_dark_wall = libtcod.Color(10, 10, 100)
 color_light_wall = libtcod.Color(130, 11, 50)
@@ -128,6 +131,9 @@ class Object:
         dx = other.x - self.x
         dy = other.y - self.y
         return math.sqrt(dx **2 + dy **2)
+    
+    def distance(self, x, y):
+        return math.sqrt((x - self.x) ** 2 + (y - self.y) ** 2)
 
     def draw(self):
         #set the color then draw the character that represents this object in its position 
@@ -231,6 +237,29 @@ class Item:
             if self.use_function() != 'cancelled':
                 inventory.remove(self.owner) #destroy the item after use unless its canceled somehow
 
+    def drop(self):
+        objects.append(self.owner)
+        inventory.remove(self.owner)
+        self.owner.x = player.x
+        self.owner.y = player.y
+        message('You dropped a ' + self.owner.name + '.',libtcod.yellow)
+
+def target_tile(max_range=None):
+    global key,mouse
+    while True:
+        libtcod.console_flush()
+        libtcod.sys_check_for_event(libtcod.EVENT_KEY_PRESS | libtcod.EVENT_MOUSE, key, mouse)
+        render_all()
+
+        (x ,y) = (mouse.cx,mouse.cy)
+
+        if mouse.lbutton_pressed:
+            return (x, y)
+
+        if mouse.rbutton or key.vk == libtcod.KEY_ESCAPE:
+            return (None, None) #exit if teh player hits right click or escape
+
+
 def handle_keys():
     global key
     global fov_recompute
@@ -264,7 +293,10 @@ def handle_keys():
         else:
             #test other keys
             key_char = chr(key.c)
-
+            if key_char == 'd':
+                chosen = inventory_menu("Press the key to drop the item, any other key to cancel\n"
+                if chosen is not None:
+                    chosen.drop()
             if key_char == 'g':
                 #pick up and item
                 for object in objects:
@@ -465,9 +497,13 @@ def place_objects(room):
             if dice <70:#healing potion
                 item_component = Item(use_function =cast_heal)
                 item = Object(x, y, '!', 'Healing potion', libtcod.violet,item = item_component)
-            elif dice < 70+15:
+            elif dice < 70+10:
                 item_component = Item(use_function=cast_confuse)
                 item = Object(x, y, '#', 'Scroll of confuse', libtcod.light_green, item = item_component)
+            elif dice <70+10+10:
+                #fireball spell
+                item_component = Item(use_function=cast_fireball)
+                item = Object(x, y, '#', 'Scroll of fireball', libtcod.green, item=item_component)
             else:
                 #lightning bolt
                 item_component = Item(use_function = cast_lightning)
@@ -641,6 +677,18 @@ def cast_confuse():
     monster.ai = ConfusedMonster(old_ai)
     monster.ai.owner = monster
     message('The eyes of the ' + monster.name + ' look vacent, as he starts to stumble around!', libtcod.light_green)
+
+def cast_fireball():
+    message('left click a target tile for teh fireball. Or right click to cancel.', libtcod.light_cyan)
+    (x, y) = target_tile()
+    if x is None: return 'cancelled'
+
+    message('The fireball explodes, burning everthing within '+ str(FIREBALL_RADIUS) + ' tiles!', libtcod.orange)
+
+    for obj in objects:
+        if obj.distance(x, y) <= FIREBALL_RADIUS and obj.fighter:
+            message('The ' + obj.name + ' gets burned for ' + str(FIREBALL_DAMAGE) + ' damage!', libtcod.orange)
+            obj.fighter.take_damage(FIREBALL_DAMAGE)
 
 #console initialization
 libtcod.console_set_custom_font('arial10x10.png',libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
