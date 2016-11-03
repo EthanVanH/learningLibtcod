@@ -37,6 +37,7 @@ DEFAULT_SPEED = 8
 DEFAULT_ATTACK_SPEED = 20
 
 HEAL_AMOUNT = 5
+CONFUSE_NUM_TURNS = 10
 
 color_dark_wall = libtcod.Color(10, 10, 100)
 color_light_wall = libtcod.Color(130, 11, 50)
@@ -176,6 +177,14 @@ class Fighter:
         if(self.hp >self.max_hp):
             self.hp = self.max_hp
 
+class DragonAI:
+    def __inti__(self):
+        self.state = 'chasing'
+
+    #def take_turn(self):
+       # if self.state == 'chasing':
+            
+
 class BasicMonster:
     #AI for a basic monster.
     def take_turn(self):
@@ -187,6 +196,20 @@ class BasicMonster:
             elif player.fighter.hp > 0:
                 monster.fighter.attack(player)
     
+class ConfusedMonster:
+    def __init__(self, old_ai, num_turns = CONFUSE_NUM_TURNS):
+        self.old_ai = old_ai
+        self.num_turns = num_turns
+
+    def take_turn(self):
+        if self.num_turns > 0: #still confused
+            #move in a random direction and decrease the number of turns confused
+            self.owner.move(libtcod.random_get_int(0, -1,-1), libtcod.random_get_int(0, -1, -1))
+            self.num_turns -=1
+        else:
+           self.owner.ai = self.old_ai
+           message('The ' + self.owner.name + ' is no longer confused', libtcod.red)
+
 class Item:
     #an item that can be picked up and used
     def __init__(self, use_function=None):
@@ -437,11 +460,32 @@ def place_objects(room):
         y = libtcod.random_get_int(0, room.y1+1, room.y2-1)
 
         if not is_blocked(x, y):
-            item_component = Item(use_function =cast_heal)
-            item = Object(x, y, '!', 'Healing potion', libtcod.violet,item = item_component)
+            dice = libtcod.random_get_int(0, 0, 100)
+            if dice <70:#healing potion
+                item_component = Item(use_function =cast_heal)
+                item = Object(x, y, '!', 'Healing potion', libtcod.violet,item = item_component)
+            elif dice < 70+15:
+                item_component = Item(use_function=cast_confuse)
+                item = Object(x, y, '#', 'Scroll of confuse', libtcod.light_yellow, item = item_component)
+            else:
+                #lightning bolt
+                item_component = Item(use_function = cast_lightning)
+                item = Object(x, y, '#', 'Scroll of lighting bolt', libtcod.yellow, item = item_component)
 
             objects.append(item)
             item.send_to_back() #item apear below monsters
+
+def closest_monster(max_range):
+    closest_monster = None
+    closest_dist = max_range +1
+
+    for object in objects:
+        if object.fighter and not object == player and libtcod.map_is_in_fov(fov_map, object.x, object.y):
+            dist = player.distance_to(object)
+            if dist < closest_dist:
+                closest_enemy = object
+                closest_dist = dist
+    return closest_enemy
 
 def is_blocked(x,y):
     if map[x][y].blocked:
@@ -571,6 +615,31 @@ def cast_heal():
     
     message('Your wounds feel less hurty!',libtcod.light_violet)
     player.fighter.heal(HEAL_AMOUNT)
+
+def cast_lightning():
+    LIGHTNING_DAMAGE = 20
+    LIGHTNING_RANGE = 5
+
+    monster = closest_monster(LIGHTNING_RANGE)
+    if monster is None: 
+        message('You need people to zap. move closer to those Trolls over there', libtcod.red)
+        return 'cancelled'
+
+    #else, lighting
+    message('A lightning bolt strikes the '+ monster.name+' with a loud thunder! The damage is ' + str(LIGHTNING_DAMAGE) + ' hit pints.', libtcod.light_blue)
+    monster.fighter.take_damage(LIGHTNING_DAMAGE)
+    message('was that really necessary?',libtcod.light_blue)
+
+def cast_confuse():
+    monster = closest_monster(CONFUSE_RANGE)
+    if monster is None:
+        message('You need people to confuse, try talking to yourself', libtcod.red)
+        return 'cancelled'
+
+    old_ai = monster.ai
+    monster.ai = ConfusedMonster(old_ai)
+    monster.ai.owner = monster
+    message('The eyes of the ' + monster.name + ' look vacent, as he starts to stumble around!', libtcod.light_green)
 
 #console initialization
 libtcod.console_set_custom_font('arial10x10.png',libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
