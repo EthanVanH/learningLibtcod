@@ -723,7 +723,7 @@ def initialize_fov():
     global fov_recompute, fov_map
     #fov mapping
     fov_recompute = True
-
+    libtcod.console_clear(con)
     fov_map = libtcod.map_new(MAP_WIDTH, MAP_HEIGHT)
 
     for y in range(MAP_HEIGHT):
@@ -763,6 +763,26 @@ def play_game():
         if player_action == 'exit':
             break
 
+def main_menu():
+    key = libtcod.Key()    
+    img = libtcod.image_load('menu_background.png')
+    while not libtcod.console_is_window_closed():
+        libtcod.image_blit_2x(img, 0, 0, 0)
 
-new_game()
-play_game()
+        
+        #show the games menu and title and credits
+        libtcod.console_set_default_foreground(0, libtcod.light_yellow)
+        libtcod.console_print_ex(0, SCREEN_WIDTH/2, SCREEN_HEIGHT/2-4, libtcod.BKGND_NONE, libtcod.CENTER, "I Want to be Ethan")
+        libtcod.console_print_ex(0, SCREEN_WIDTH/2, SCREEN_HEIGHT-2, libtcod.BKGND_NONE, libtcod.CENTER, 'By Ethan')
+        choice = menu('',['Play a new game','Continue last game', 'Quit'], 24)
+        
+        if key.vk == libtcod.KEY_ENTER and key.lalt:
+            libtcod.console_set_fullscreen(not libtcod.console_is_fullscreen())
+
+        if choice == 0: #new game
+            new_game()
+            play_game()
+        elif choice ==2: #quit
+            break
+
+main_menu()
