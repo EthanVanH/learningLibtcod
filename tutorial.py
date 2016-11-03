@@ -48,12 +48,6 @@ color_light_wall = libtcod.Color(130, 11, 50)
 color_dark_ground = libtcod.Color(50, 50, 150)
 color_light_ground = libtcod.Color(200, 180, 50)
 
-game_state = 'playing'
-player_action = None
-
-game_msgs = []
-
-
 
 class Rect:
     #a rectangle on the map. used to characterize a room
@@ -294,7 +288,7 @@ def handle_keys():
             #test other keys
             key_char = chr(key.c)
             if key_char == 'd':
-                chosen = inventory_menu("Press the key to drop the item, any other key to cancel\n"
+                chosen = inventory_menu("Press the key to drop the item, any other key to cancel\n")
                 if chosen is not None:
                     chosen.drop()
             if key_char == 'g':
@@ -323,7 +317,9 @@ def get_names_under_mouse():
     return names.capitalize()
 
 def make_map():
-    global map
+    global map, objects
+
+    objects = [player]
 
     #fill the map with "blocked" tiles
     map = [[Tile(True)
@@ -701,49 +697,72 @@ panel = libtcod.console_new(SCREEN_WIDTH, PANEL_HEIGHT)
 libtcod.sys_set_fps(LIMIT_FPS)
 
 
+def new_game():
+    global player, inventory, game_msgs, game_state
+    #Object initialization
+    player_fighter_component = Fighter(hp=30, defense=2, power=5, death_function = player_death)
+    player = Object(SCREEN_WIDTH/2,SCREEN_HEIGHT/2,'@','player',libtcod.white,blocks = True,fighter=player_fighter_component, speed=PLAYER_SPEED)
+    objects = [player]
+    #game state set 
+    game_state = 'playing'
 
-#Object initialization
-player_fighter_component = Fighter(hp=30, defense=2, power=5, death_function = player_death)
-player = Object(SCREEN_WIDTH/2,SCREEN_HEIGHT/2,'@','player',libtcod.white,blocks = True,fighter=player_fighter_component, speed=PLAYER_SPEED)
-objects = [player]
-inventory = []
-# generates the map(NOT DRAWN)
-make_map()
 
-#fov mapping
-fov_map = libtcod.map_new(MAP_WIDTH, MAP_HEIGHT)
+    # generates the map(NOT DRAWN)
+    make_map()
 
-for y in range(MAP_HEIGHT):
-    for x in range(MAP_WIDTH):
-        libtcod.map_set_properties(fov_map, x, y, not map[x][y].block_sight, not map[x][y].blocked)
+    inventory = []
+    game_msgs = []
 
-fov_recompute = True
+    #opening message
+    message('Welcome, to Ethans RL.  I bet you dont survive the floor', libtcod.red)
 
-#opening message
-message('Welcome, to Ethans RL.  I bet you dont survive the floor', libtcod.red)
+    initialize_fov()
 
-#configure mouse keyboard
-mouse = libtcod.Mouse()
-key = libtcod.Key()
 
-#game loop
-while not libtcod.console_is_window_closed():
-    libtcod.sys_check_for_event(libtcod.EVENT_KEY_PRESS| libtcod.EVENT_MOUSE, key, mouse)
-    render_all()
+def initialize_fov():
+    global fov_recompute, fov_map
+    #fov mapping
+    fov_recompute = True
+
+    fov_map = libtcod.map_new(MAP_WIDTH, MAP_HEIGHT)
+
+    for y in range(MAP_HEIGHT):
+        for x in range(MAP_WIDTH):
+            libtcod.map_set_properties(fov_map, x, y, not map[x][y].block_sight, not map[x][y].blocked)
+
+
+
+def play_game():
+    global key, mouse 
+
+    player_action = None
     
-    libtcod.console_flush()    
+    #configure mouse keyboard
+    mouse = libtcod.Mouse()
+    key = libtcod.Key()
 
-    for object in objects:
-        object.clear()
+    #game loop
+    while not libtcod.console_is_window_closed():
+        libtcod.sys_check_for_event(libtcod.EVENT_KEY_PRESS| libtcod.EVENT_MOUSE, key, mouse)
+        render_all()
+    
+        libtcod.console_flush()    
 
-    player_action = handle_keys()
-    if game_state == 'playing':
         for object in objects:
-            if object.ai:
-                if object.wait >0: #dont take a turn if still waiting
-                    object.wait -=1
-                else:
-                    object.ai.take_turn()
+            object.clear()
 
-    if player_action == 'exit':
-        break
+        player_action = handle_keys()
+        if game_state == 'playing':
+            for object in objects:
+                if object.ai:
+                    if object.wait >0: #dont take a turn if still waiting
+                        object.wait -=1
+                    else:
+                        object.ai.take_turn()
+
+        if player_action == 'exit':
+            break
+
+
+new_game()
+play_game()
