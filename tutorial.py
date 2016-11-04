@@ -521,7 +521,7 @@ def place_objects(room):
             item.send_to_back() #item apear below monsters
 
 def closest_monster(max_range):
-    closest_monster = None
+    closest_enemy = None
     closest_dist = max_range +1
 
     for object in objects:
