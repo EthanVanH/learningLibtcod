@@ -20,6 +20,9 @@ MSG_X = BAR_WIDTH +2
 MSG_WIDTH = SCREEN_WIDTH - BAR_WIDTH -2
 MSG_HEIGHT = PANEL_HEIGHT -1
 
+CHARACTER_SCREEN_WIDTH = 30
+LEVEL_SCREEN_WIDTH = 40
+
 ROOM_MAX_SIZE = 10
 ROOM_MIN_SIZE = 6
 MAX_ROOMS = 30
@@ -36,6 +39,9 @@ TORCH_RADIUS = 10
 PLAYER_SPEED = 1
 DEFAULT_SPEED = 8
 DEFAULT_ATTACK_SPEED = 20
+
+LEVEL_UP_BASE = 200
+LEVEL_UP_FACTOR = 150
 
 HEAL_AMOUNT = 5
 CONFUSE_NUM_TURNS = 10
@@ -150,9 +156,10 @@ class Object:
 
 class Fighter:
     #combat-related properties and methods (monster, player, npc)
-    def __init__(self, hp, defense, power, death_function=None, attack_speed = DEFAULT_ATTACK_SPEED):
+    def __init__(self, hp, defense, power, xp, death_function=None, attack_speed = DEFAULT_ATTACK_SPEED):
         self.max_hp = hp
         self.hp = hp
+        self.xp = xp
         self.defense = defense
         self.power = power
         self.death_function = death_function
@@ -164,8 +171,12 @@ class Fighter:
 
             if self.hp <= 0:
                 function = self.death_function
+
+                if self.owner != player:
+                    player.fighter.xp += self.xp
                 if function is not None:
                     function(self.owner)
+
 
     def attack(self, target):
         damage = self.power - target.fighter.defense
@@ -292,6 +303,10 @@ def handle_keys():
         else:
             #test other keys
             key_char = chr(key.c)
+            if key_char == 'c':
+                #chow character info
+                level_up_xp = LEVEL_UP_BASE + player.level * LEVEL_UP_FACTOR
+                msgbox('Character Info\n\nLevel: ' + str(player.level) + '\nEXP: ' +str(player.fighter.xp) + '\nMax Hp: '+ str(player.fighter.max_hp) + '\nAttack: ' + str(player.fighter.power) + '\nDefense: ' + str(player.fighter.defense), CHARACTER_SCREEN_WIDTH)
             if key_char == 'd':
                 chosen = inventory_menu("Press the key to drop the item, any other key to cancel\n")
                 if chosen is not None:
@@ -479,20 +494,20 @@ def place_objects(room):
             choice = libtcod.random_get_int(0,0,100)
             if choice< 40: #40% chance of orc
                 #ORC
-                stats = Fighter(hp=10, defense=0, power=3, death_function = monster_death)
+                stats = Fighter(hp=10, defense=0, power=3, xp = 35,death_function = monster_death)
                 ai_comp = BasicMonster()
                 monster = Object(x, y, 'o', 'orc', libtcod.desaturated_green, blocks = True, fighter=stats, ai=ai_comp)
             elif choice ==41: #1% chance of Alec
-                stats = Fighter(hp=50, defense=0, power=0, death_function = monster_death)
+                stats = Fighter(hp=50, defense=0, power=0, xp = 1000, death_function = monster_death)
                 ai_comp = BasicMonster()
                 monster = Object(x, y, 'A', 'Alec', libtcod.orange, blocks = True, fighter=stats, ai=ai_comp)
             elif choice > 41 and choice <70:
-                stats = Fighter(hp=5, defense= 1, power = 1, death_function = monster_death)
+                stats = Fighter(hp=5, defense= 1, power = 1, xp = 1, death_function = monster_death)
                 ai_comp = BasicMonster()
                 monster = Object(x, y, 'J', 'Jacobi', libtcod.light_purple, blocks = True, fighter = stats, ai=ai_comp)
             else:
                 #TROLL
-                stats = Fighter(hp=16, defense=1, power=4, death_function = monster_death)
+                stats = Fighter(hp=16, defense=1, power=4, xp = 100,death_function = monster_death)
                 ai_comp = BasicMonster()
                 monster = Object(x, y, 'T', 'Troll', libtcod.darker_green, blocks = True, fighter=stats, ai=ai_comp)
             objects.append(monster)
@@ -520,7 +535,7 @@ def place_objects(room):
             else:
                 #lightning bolt
                 item_component = Item(use_function = cast_lightning)
-                item = Object(x, y, '#', 'Scroll of lighting bolt', libtcod.green, item = item_component)
+                item = Object(x, y, '#', 'Scroll of lightning bolt', libtcod.green, item = item_component)
 
             objects.append(item)
             item.send_to_back() #item apear below monsters
@@ -660,7 +675,7 @@ def inventory_menu(header):
 def cast_heal():
     #heal the player
     if player.fighter.hp == player.fighter.max_hp:
-        message("you're already full heal moron!", libtcod.red)
+        message("you're already full health moron!", libtcod.red)
         return 'cancelled'
     
     message('Your wounds feel less hurty!',libtcod.light_violet)
@@ -703,6 +718,25 @@ def cast_fireball():
             message('The ' + obj.name + ' gets burned for ' + str(FIREBALL_DAMAGE) + ' damage!', libtcod.orange)
             obj.fighter.take_damage(FIREBALL_DAMAGE)
 
+def check_level_up():
+    level_up_xp = LEVEL_UP_BASE + player.level * LEVEL_UP_FACTOR
+    if player.fighter.xp >= level_up_xp:
+        player.level +=1
+        player.fighter.xp -= level_up_xp
+        message('Your battle skills grow stronger! Level Up!', libtcod.yellow)
+        message('How have you not died yet?...', libtcod.red)
+       
+        choice = None 
+        while choice ==None:
+            choice = menu('Level up! Choose a stat to raise\n', ['Constitution +20hp','Agility +1 Defense', 'Strength +1 Attack'], LEVEL_SCREEN_WIDTH)
+            if choice == 0:
+                player.fighter.max_hp += 20
+                player.fighter.hp += 20
+            elif choice == 1:
+                player.fighter.defense += 1
+            elif choice == 2:
+                player.fighter.power += 1 
+
 #console initialization
 libtcod.console_set_custom_font('arial10x10.png',libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
 #screen initialization root is view, con is model, panel is Gui stuff
@@ -717,8 +751,9 @@ libtcod.sys_set_fps(LIMIT_FPS)
 def new_game():
     global player, inventory, game_msgs, game_state
     #Object initialization
-    player_fighter_component = Fighter(hp=30, defense=2, power=5, death_function = player_death)
+    player_fighter_component = Fighter(hp=30, defense=2, power=5, xp = 0, death_function = player_death)
     player = Object(SCREEN_WIDTH/2,SCREEN_HEIGHT/2,'@','player',libtcod.white,blocks = True,fighter=player_fighter_component, speed=PLAYER_SPEED)
+    player.level = 1
     objects = [player]
     #game state set 
     game_state = 'playing'
@@ -807,6 +842,8 @@ def play_game():
     
         libtcod.console_flush()    
 
+        check_level_up()
+
         for object in objects:
             object.clear()
 
@@ -825,10 +862,9 @@ def msgbox(text, width=50):
     menu(text, [], width)
 
 def main_menu():
-    global objects
     key = libtcod.Key()    
     img = libtcod.image_load('menu_background.png')
-    objects = []
+    
     while not libtcod.console_is_window_closed():
         libtcod.image_blit_2x(img, 0, 0, 0)
 
