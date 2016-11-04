@@ -50,6 +50,9 @@ color_dark_ground = libtcod.Color(50, 50, 150)
 color_light_ground = libtcod.Color(200, 180, 50)
 
 
+dungeon_level = 1
+
+
 class Rect:
     #a rectangle on the map. used to characterize a room
     def __init__(self, x, y, w, h):
@@ -433,6 +436,8 @@ def render_all():
 
     render_bar(1, 1, BAR_WIDTH, 'HP', player.fighter.hp, player.fighter.max_hp, libtcod.light_red, libtcod.darker_red)
 
+    #render dungeon level
+    libtcod.console_print_ex(panel, 1, 3, libtcod.BKGND_NONE, libtcod.LEFT, 'Dungeon level ' + str(dungeon_level))
     #render mouse hover names
     libtcod.console_set_default_foreground(panel, libtcod.light_grey)
     libtcod.console_print_ex(panel, 1, 0, libtcod.BKGND_NONE, libtcod.LEFT, get_names_under_mouse())
@@ -732,9 +737,12 @@ def new_game():
 
 
 def next_level():
+    global dungeon_level
     #advance to the enxt level
     message('You take a moment to rest and recover your strength', libtcod.light_violet)
     player.fighter.heal(player.fighter.max_hp/2) #half health heal
+    
+    dungeon_level += 1
 
     message('You descend ever deeper...', libtcod.red)
     make_map()
@@ -761,10 +769,12 @@ def save_game():
     file['inventory'] = inventory
     file['game_msgs'] = game_msgs
     file['game_state'] = game_state
+    file['stairs_index'] = objects.index(stairs)
+    file['dungeon_level'] = dungeon_level
     file.close()
 
 def load_game():
-    global map, objects, player, inventory, game_msgs, game_state
+    global map, objects, player, inventory, game_msgs, game_state, stairs, dungeon_level
 
     file.shelve.open('savegame', 'r')
     map = file['map']
@@ -773,6 +783,9 @@ def load_game():
     inventory = file['inventory']
     game_msgs = file['game_msgs']
     game_state = file['game_state']
+    stairs = objects[file['stairs_index']]
+    dungeon_level = file['dungeon_level']
+
 
     file.close()
 
@@ -812,8 +825,10 @@ def msgbox(text, width=50):
     menu(text, [], width)
 
 def main_menu():
+    global objects
     key = libtcod.Key()    
     img = libtcod.image_load('menu_background.png')
+    objects = []
     while not libtcod.console_is_window_closed():
         libtcod.image_blit_2x(img, 0, 0, 0)
 
