@@ -259,6 +259,7 @@ def handle_keys():
     global key
     global fov_recompute
     global playerx, playery
+    global stairs
     
     #realtime Not needed when mouse and keyboard are configured
     #key = libtcod.console_check_for_keypress()
@@ -302,6 +303,10 @@ def handle_keys():
                 chosen = inventory_menu('To use an item press the key next to it, any other key will close the window \n')
                 if chosen is not None:
                     chosen.use()
+            if key_char == '<' or key_char == '>':
+                #go down stairs if the player is on them
+                if stairs.x == player.x and stairs.y == player.y:
+                    next_level()
             return 'didnt-take-turn'
 
 def get_names_under_mouse():
@@ -318,7 +323,7 @@ def get_names_under_mouse():
     return names.capitalize()
 
 def make_map():
-    global map, objects
+    global map, objects, stairs
 
     objects = [player]
 
@@ -373,6 +378,12 @@ def make_map():
             place_objects(new_room)
             rooms.append(new_room)
             num_rooms += 1
+
+    #second floor
+    #create stairs
+    stairs = Object(new_x, new_y, '<', 'Stairs', libtcod.white)        
+    objects.append(stairs)
+    stairs.send_to_back() #Drawn below the monsters
 
 def render_all():
     global color_light_wall, color_dark_wall
@@ -719,6 +730,16 @@ def new_game():
 
     initialize_fov()
 
+
+def next_level():
+    #advance to the enxt level
+    message('You take a moment to rest and recover your strength', libtcod.light_violet)
+    player.fighter.heal(player.fighter.max_hp/2) #half health heal
+
+    message('You descend ever deeper...', libtcod.red)
+    make_map()
+    initialize_fov()
+    
 
 def initialize_fov():
     global fov_recompute, fov_map
