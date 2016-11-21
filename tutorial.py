@@ -27,8 +27,8 @@ ROOM_MAX_SIZE = 10
 ROOM_MIN_SIZE = 6
 MAX_ROOMS = 30
 
-MAX_ROOM_MONSTERS = 3
-MAX_ROOM_ITEMS = 2
+#MAX_ROOM_MONSTERS = 3
+#MAX_ROOM_ITEMS = 2
 
 LIMIT_FPS = 20
 
@@ -55,6 +55,9 @@ color_light_wall = libtcod.Color(130, 11, 50)
 color_dark_ground = libtcod.Color(50, 50, 150)
 color_light_ground = libtcod.Color(200, 180, 50)
 
+
+monster_chances = {'Orc':67,'Alec':1,'Jacobi':10,'Troll':22}
+item_chances = {'Heal':70,'Lightning':10,'Fireball':10,'Confuse':10}
 
 dungeon_level = 1
 
@@ -482,30 +485,33 @@ def create_v_tunnel(y1, y2, x):
         map[x][y].block_sight = False
 
 def place_objects(room):
-    #as we stand objects must be monsters
     #choose a random number of monsters
-    num_monsters = libtcod.random_get_int(0, 0, MAX_ROOM_MONSTERS)
+    num_monsters = from_dungeon_level([[2,1],[3,4], [5,6]])
+    #monster chances
+    monster_chances = {}
+    monster_chances['Orc'] = 80
+    monster_chances['Troll'] = from_dungeon_level([[15, 3], [30, 5], [60, 7]])
 
     for i in range(num_monsters):
         #choose a random spot for the monster
         x = libtcod.random_get_int(0, room.x1+1, room.x2-1)
         y = libtcod.random_get_int(0, room.y1+1, room.y2-1)
         if not is_blocked(x, y):
-            choice = libtcod.random_get_int(0,0,100)
-            if choice< 40: #40% chance of orc
+            choice = random_choice(monster_chances)
+            if choice=='Orc': #40% chance of orc
                 #ORC
                 stats = Fighter(hp=10, defense=0, power=3, xp = 35,death_function = monster_death)
                 ai_comp = BasicMonster()
                 monster = Object(x, y, 'o', 'orc', libtcod.desaturated_green, blocks = True, fighter=stats, ai=ai_comp)
-            elif choice ==41: #1% chance of Alec
+            elif choice =='Alec': #1% chance of Alec
                 stats = Fighter(hp=50, defense=0, power=0, xp = 1000, death_function = monster_death)
                 ai_comp = BasicMonster()
                 monster = Object(x, y, 'A', 'Alec', libtcod.orange, blocks = True, fighter=stats, ai=ai_comp)
-            elif choice > 41 and choice <70:
+            elif choice =='Jacobi':
                 stats = Fighter(hp=5, defense= 1, power = 1, xp = 1, death_function = monster_death)
                 ai_comp = BasicMonster()
                 monster = Object(x, y, 'J', 'Jacobi', libtcod.light_purple, blocks = True, fighter = stats, ai=ai_comp)
-            else:
+            elif choice == 'Troll':
                 #TROLL
                 stats = Fighter(hp=16, defense=1, power=4, xp = 100,death_function = monster_death)
                 ai_comp = BasicMonster()
@@ -513,7 +519,13 @@ def place_objects(room):
             objects.append(monster)
 
     #items now
-    num_items = libtcod.random_get_int(0, 0, MAX_ROOM_ITEMS)
+    num_items = from_dungeon_level([[1, 1], [2, 4]])
+    #item chances
+    item_chances = {}
+    item_chances['Heal'] = 35
+    item_chances['Lightning'] = from_dungeon_level([[25, 4]])
+    item_chances['Fireball'] = from_dungeon_level([[25, 6]])
+    item_chances['Confuse'] = from_dungeon_level([[10, 2]])
 
     for i in range(num_items):
         #choose a random spot for the item
@@ -521,24 +533,44 @@ def place_objects(room):
         y = libtcod.random_get_int(0, room.y1+1, room.y2-1)
 
         if not is_blocked(x, y):
-            dice = libtcod.random_get_int(0, 0, 100)
-            if dice <70:#healing potion
+            choice = random_choice(item_chances)
+            if choice =='Heal':#healing potion
                 item_component = Item(use_function =cast_heal)
                 item = Object(x, y, '!', 'Healing potion', libtcod.violet,item = item_component)
-            elif dice < 70+10:
+            elif choice =='Confuse':
                 item_component = Item(use_function=cast_confuse)
                 item = Object(x, y, '#', 'Scroll of confuse', libtcod.light_green, item = item_component)
-            elif dice <70+10+10:
+            elif choice =='Fireball':
                 #fireball spell
                 item_component = Item(use_function=cast_fireball)
                 item = Object(x, y, '#', 'Scroll of fireball', libtcod.green, item=item_component)
-            else:
+            elif choice =='Lightning':
                 #lightning bolt
                 item_component = Item(use_function = cast_lightning)
                 item = Object(x, y, '#', 'Scroll of lightning bolt', libtcod.green, item = item_component)
 
             objects.append(item)
             item.send_to_back() #item apear below monsters
+
+
+def random_choice(chances_dict):
+    chances = chances_dict.values()
+    strings = chances_dict.keys()
+
+    return strings[random_choice_index(chances)]
+
+def random_choice_index(chances):
+    dice = libtcod.random_get_int(0,1, sum(chances))
+
+    running_sum = 0
+    choice = 0
+    for w in chances:
+        running_sum += w
+        
+        if dice <= running_sum:
+            return choice
+        choice +=1
+
 
 def closest_monster(max_range):
     closest_enemy = None
@@ -737,6 +769,12 @@ def check_level_up():
             elif choice == 2:
                 player.fighter.power += 1 
 
+def from_dungeon_level(table):
+    for (value, level) in reversed(table):
+        if dungeon_level >= level:
+            return value
+    return 0
+
 #console initialization
 libtcod.console_set_custom_font('arial10x10.png',libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
 #screen initialization root is view, con is model, panel is Gui stuff
@@ -757,14 +795,14 @@ def new_game():
     objects = [player]
     #game state set 
     game_state = 'playing'
-
+    
 
     # generates the map(NOT DRAWN)
     make_map()
 
     inventory = []
     game_msgs = []
-
+    dungeon_level = 1
     #opening message
     message('Welcome, to Ethans RL.  I bet you dont survive the floor', libtcod.red)
 
@@ -834,7 +872,7 @@ def play_game():
     #configure mouse keyboard
     mouse = libtcod.Mouse()
     key = libtcod.Key()
-
+    dungeon_level = 1
     #game loop
     while not libtcod.console_is_window_closed():
         libtcod.sys_check_for_event(libtcod.EVENT_KEY_PRESS| libtcod.EVENT_MOUSE, key, mouse)
